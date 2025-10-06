@@ -24,19 +24,31 @@ project/
 
 ### ⚙️ Environment Setup
 
-To ensure reproducibility, install all dependencies from the provided `requirements.txt` file.  
-This will automatically install the correct versions of all required libraries.
+To ensure reproducibility, use [uv](https://github.com/astral-sh/uv), a fast Python package manager and resolver. uv can automatically create and activate your virtual environment, install dependencies, and synchronize your environment with the lock file.
 
 ```bash
-# Create and activate a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # (Linux/Mac)
-venv\Scripts\activate     # (Windows)
+# Create and activate a virtual environment using uv
+uv venv
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies and synchronize with lock file
+uv pip sync
 ```
-⸻
+
+If you need to add a new package, use:
+```bash
+uv pip install <package-name>
+```
+This will automatically update requirements.txt and uv.lock.
+
+If you want to upgrade all dependencies to their latest compatible versions:
+```bash
+uv pip compile --upgrade
+uv pip sync
+```
+
+For more details, see the [uv documentation](https://github.com/astral-sh/uv).
+
+---
 
 ### 📦 Data Access
 
@@ -66,4 +78,3 @@ dvc pull data/interim/energy_fill.csv
 3. All results are automatically saved and versioned via DVC under data/processed/.
 
 * Python script version
-⸻
