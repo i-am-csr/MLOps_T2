@@ -1,0 +1,5 @@
+outs:
+- md5: e35c72dffd1f468ae8997050e7db10ac
+  size: 36181
+  hash: md5
+  path: energy_efficiency_original.csv

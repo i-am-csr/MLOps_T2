@@ -5,4 +5,10 @@ python-dotenv
 ruff
 tqdm
 typer
+pydantic
+pandas
+numpy
+seaborn
+matplotlib
+scikit-learn
 -e .

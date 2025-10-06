@@ -1,0 +1,5 @@
+outs:
+- md5: 827743cc17b1f406dadca5288672086b
+  size: 34866
+  hash: md5
+  path: energy_efficiency_interim_clean_drop.csv
