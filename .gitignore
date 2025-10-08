@@ -1,0 +1,6 @@
+*.csv
+*.parquet
+
+.vscode/
+isabellaarangor-key
+isabellaarangor-key.pub
