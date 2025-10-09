@@ -1,5 +1,5 @@
 # Ignore JetBrains IDE project files
-.idea/
+.idea/vcs.xml
 
 # Ignore all CSV files (handled by DVC)
 *.csv
@@ -9,6 +9,7 @@
 
 # Ignore DVC local config backup
 .dvc/config.local.bak
+.dvc/config.bak
 
-# ...existing .gitignore rules...
-
+# Ignore DS_Store files (macOS)
+.DS_Store
