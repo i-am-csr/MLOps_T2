@@ -1,6 +1,5 @@
 [core]
     remote = do_remote
-
 ['remote "do_remote"']
     url = ssh://root@138.68.15.126/opt/dvc_storage
-    keyfile = /Users/cbarrien/mlops-ssh
+    keyfile = C:/Users/Isa/Desktop/MLOPs/MLOps_T2/isabellaarangor-key
