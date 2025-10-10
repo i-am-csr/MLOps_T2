@@ -1,2 +1,12 @@
-/energy_efficiency_modified.csv
-/energy_efficiency_original.csv
+# Ignore JetBrains IDE project files
+.idea/
+
+# Ignore all CSV and parquet files (handled by DVC)
+*.csv
+*.parquet
+
+# Ignore all Markdown files
+*.md
+
+# Ignore DVC local config backup
+.dvc/config.local.bak

@@ -1,4 +1,12 @@
-/energy_efficiency_clean_drop.csv
-/energy_efficiency_clean_fill.csv
-/energy_efficiency_clean_drop.parquet
-/energy_efficiency_clean_fill.parquet
+# Ignore JetBrains IDE project files
+.idea/
+
+# Ignore all CSV and parquet files (handled by DVC)
+*.csv
+*.parquet
+
+# Ignore all Markdown files
+*.md
+
+# Ignore DVC local config backup
+.dvc/config.local.bak

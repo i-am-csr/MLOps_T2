@@ -1,4 +1,18 @@
+# Ignore JetBrains IDE project files
+.idea/vcs.xml
+
+# Ignore all CSV files (handled by DVC)
 *.csv
+
+# Ignore all Markdown files
+*.md
+
+# Ignore DVC local config backup
+.dvc/config.local.bak
+.dvc/config.bak
+
+# Ignore DS_Store files (macOS)
+.DS_Store*.csv
 *.parquet
 
 .vscode/
