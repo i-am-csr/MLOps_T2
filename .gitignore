@@ -13,3 +13,9 @@
 
 # Ignore DS_Store files (macOS)
 .DS_Store
+*.csv
+*.parquet
+
+.vscode/
+isabellaarangor-key
+isabellaarangor-key.pub
