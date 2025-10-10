@@ -1,4 +1,29 @@
-site_name: proyecto_final
-# 
-site_author: team_2
-# 
+site_name: MLOps Project - Energy Efficiency
+site_author: Team_2
+theme:
+ name: material
+ palette:
+   # Palette toggle for light mode
+   - scheme: default
+     toggle:
+       icon: material/brightness-7
+       name: Switch to dark mode
+
+
+   # Palette toggle for dark mode
+   - scheme: slate
+     toggle:
+       icon: material/brightness-4
+       name: Switch to light mode
+
+
+# Navigation Structure
+nav:
+ - 'Home': 'index.md'
+ - 'Getting Started': 'getting-started.md'
+ - 'DVC Setup': 'dvc_setup.md'
+ - 'Exploratory Data Analysis': 'EDA.md'
+ - 'Data Cleaning':
+     - 'Clean (Drop NA)': 'clean-drop-dataset.md'
+     - 'Clean (Fill NA)': 'clean-fill-dataset.md'
+ - 'Model Training': 'model-training.md'
