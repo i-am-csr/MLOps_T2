@@ -111,6 +111,7 @@ dependencies = [
     "iterative-telemetry==0.0.10",
     "jedi==0.19.2",
     "jinja2==3.1.6",
+    "joblib>=1.5.2",
     "json5==0.12.1",
     "jsonpointer==3.0.0",
     "jsonschema==4.25.1",
@@ -240,6 +241,7 @@ dependencies = [
     "webcolors==24.11.1",
     "webencodings==0.5.1",
     "websocket-client==1.8.0",
+    "xgboost>=3.0.5",
     "yarl==1.21.0",
     "zc-lockfile==4.0",
 ]
