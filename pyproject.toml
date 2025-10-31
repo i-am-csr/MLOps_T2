@@ -139,6 +139,7 @@ dependencies = [
     "mistune==3.1.4",
     "mkdocs>=1.6.1",
     "mkdocs-get-deps==0.2.0",
+    "mlflow>=3.5.1",
     "multidict==6.6.4",
     "nbclient==0.10.2",
     "nbconvert==7.16.6",
