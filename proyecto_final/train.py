@@ -135,6 +135,21 @@ def main():
         target_mapping=DATA.targets
     )
 
+    # Persist metrics to models directory so DVC can track them.
+    # DVC expects files like '../models/xgboost_metrics.json' (relative to proyecto_final/dvc.yaml),
+    # which resolves to MODELS_DIR / '<model_name>_metrics.json'.
+    try:
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        metrics_path = MODELS_DIR / f"{config.model.name}_metrics.json"
+        # We save only the metrics summary (not hpo results) to keep the file compact.
+        metrics_summary = {k: v.get("metrics", {}) for k, v in results.items()}
+        with open(metrics_path, "w") as mf:
+            import json
+            json.dump(metrics_summary, mf, indent=2)
+        logger.info(f"Saved metrics to: {metrics_path}")
+    except Exception as e:
+        logger.warning(f"Could not write metrics file to {MODELS_DIR}: {e}")
+
     logger.info("=" * 70)
     logger.info("TRAINING PIPELINE COMPLETE")
     logger.info("=" * 70)

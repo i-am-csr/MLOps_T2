@@ -1,0 +1,201 @@
+schema: '2.0'
+stages:
+  preprocessing:
+    cmd: python -m proyecto_final.scripts.run_preprocessing
+    deps:
+    - path: ../data/raw/energy_efficiency_modified.csv
+      hash: md5
+      md5: 353c3b5b5f27257faeb0851089d7f594
+      size: 43747
+    - path: data/preprocessing.py
+      hash: md5
+      md5: 4cf21b4cef5eff12aebcd10d599b43e0
+      size: 10113
+    - path: preprocessing/pipeline.py
+      hash: md5
+      md5: 671faccd998275f3c6480e943cc80418
+      size: 5593
+    - path: preprocessing/transformers.py
+      hash: md5
+      md5: 6c05478a78349b2b772561a0c9a7995c
+      size: 13639
+    outs:
+    - path: ../data/interim/energy_efficiency_interim_clean.csv
+      hash: md5
+      md5: 65871286bac1df6c15d2883841b33c0e
+      size: 40840
+    - path: ../data/processed/energy_efficiency_test_prepared.csv
+      hash: md5
+      md5: 77c08a5ca1a06bde232f14d5981895af
+      size: 13025
+    - path: ../data/processed/energy_efficiency_train_prepared.csv
+      hash: md5
+      md5: 559c9fcb0a9f3c4d4cd4cd5ba72e4572
+      size: 52052
+    - path: ../models/encoding_scaling_transformer.joblib
+      hash: md5
+      md5: 48e9740ac95dad89c5688c6686358164
+      size: 3258
+    - path: ../models/initial_cleaning_pipeline.joblib
+      hash: md5
+      md5: 11e58f5807c09bd78cd91c620f112527
+      size: 1451
+  train_xgboost:
+    cmd: HOME=$(pwd)/.. python -m proyecto_final.train --config configs/xgb.yaml
+      --skip-preprocessing
+    deps:
+    - path: ../data/processed/energy_efficiency_test_prepared.csv
+      hash: md5
+      md5: 77c08a5ca1a06bde232f14d5981895af
+      size: 13025
+    - path: ../data/processed/energy_efficiency_train_prepared.csv
+      hash: md5
+      md5: 559c9fcb0a9f3c4d4cd4cd5ba72e4572
+      size: 52052
+    - path: configs/xgb.yaml
+      hash: md5
+      md5: 2f5f796bed7ad93b01043a0894156cd2
+      size: 522
+    - path: modeling/trainer.py
+      hash: md5
+      md5: 09f5b9904810277f21ebfa2005841d32
+      size: 12447
+    params:
+      configs/xgb.yaml:
+        hpo:
+          enabled: true
+          search: random
+          cv: 5
+          scoring: neg_root_mean_squared_error
+          n_jobs: -1
+          n_iter: 30
+          param_grid:
+            n_estimators:
+            - 100
+            - 200
+            - 400
+            - 800
+            learning_rate:
+            - 0.05
+            - 0.1
+            - 0.2
+            max_depth:
+            - 3
+            - 6
+            - 8
+            min_child_weight:
+            - 1
+            - 5
+            - 10
+            subsample:
+            - 0.7
+            - 0.9
+            - 1.0
+            colsample_bytree:
+            - 0.7
+            - 0.9
+            - 1.0
+        model:
+          name: xgboost
+          library: xgboost_sklearn
+          params:
+            objective: reg:squarederror
+            n_estimators: 100
+            random_state: 42
+            n_jobs: -1
+        split:
+          test_size: 0.2
+          random_state: 42
+    outs:
+    - path: ../models/xgboost_cooling_model.joblib
+      hash: md5
+      md5: 0210439533a4489eb4e2bdf4d5b8c650
+      size: 899933
+    - path: ../models/xgboost_heating_model.joblib
+      hash: md5
+      md5: 5e9e66626e78f90e19c42447a7e9556b
+      size: 901769
+    - path: ../models/xgboost_metrics.json
+      hash: md5
+      md5: c0d453492e360873d072be43d25b6443
+      size: 226
+  train_random_forest:
+    cmd: HOME=$(pwd)/.. python -m proyecto_final.train --config configs/rf.yaml 
+      --skip-preprocessing
+    deps:
+    - path: ../data/processed/energy_efficiency_test_prepared.csv
+      hash: md5
+      md5: 77c08a5ca1a06bde232f14d5981895af
+      size: 13025
+    - path: ../data/processed/energy_efficiency_train_prepared.csv
+      hash: md5
+      md5: 559c9fcb0a9f3c4d4cd4cd5ba72e4572
+      size: 52052
+    - path: configs/rf.yaml
+      hash: md5
+      md5: 99e29d80a7fb86cc8493aa0eed0132b4
+      size: 584
+    - path: modeling/trainer.py
+      hash: md5
+      md5: 09f5b9904810277f21ebfa2005841d32
+      size: 12447
+    params:
+      configs/rf.yaml:
+        hpo:
+          enabled: false
+          search: random
+          cv: 5
+          scoring: neg_root_mean_squared_error
+          n_jobs: -1
+          n_iter: 30
+          param_grid:
+            n_estimators:
+            - 100
+            - 200
+            - 400
+            - 800
+            max_depth:
+            - 
+            - 5
+            - 10
+            - 20
+            min_samples_split:
+            - 2
+            - 4
+            - 8
+            min_samples_leaf:
+            - 1
+            - 2
+            - 4
+            max_features:
+            - 1.0
+            - sqrt
+            - log2
+        model:
+          name: random_forest
+          library: sklearn
+          params:
+            n_estimators: 100
+            criterion: squared_error
+            max_depth:
+            min_samples_split: 2
+            min_samples_leaf: 1
+            max_features: 1.0
+            random_state: 42
+            n_jobs: -1
+        split:
+          test_size: 0.2
+          random_state: 42
+    outs:
+    - path: ../models/random_forest_cooling_model.joblib
+      hash: md5
+      md5: 5c2cef65a2d619ab0944e84b9efdd782
+      size: 5205857
+    - path: ../models/random_forest_heating_model.joblib
+      hash: md5
+      md5: 53d1a903768f8a464ebcfcf07f3b4473
+      size: 5152865
+    - path: ../models/random_forest_metrics.json
+      hash: md5
+      md5: 9283407a845429270c0bcd1708e41390
+      size: 221

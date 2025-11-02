@@ -65,6 +65,21 @@ class ModelTrainer:
 
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
+        # Respect project-level MLflow configuration (set via proyecto_final.config.setup_mlflow).
+        # Only fall back to a local `mlruns/` file store if no tracking URI is configured.
+        try:
+            from proyecto_final.config import MLFLOW, PROJ_ROOT
+        except Exception:
+            MLFLOW = None
+            PROJ_ROOT = Path(__file__).resolve().parents[2]
+
+        # If MLFLOW.tracking_uri is empty or falsy, use a local file-backed mlruns directory
+        if not (MLFLOW and getattr(MLFLOW, "tracking_uri", None)):
+            repo_root = PROJ_ROOT
+            mlruns_dir = repo_root / "mlruns"
+            mlruns_dir.mkdir(parents=True, exist_ok=True)
+            mlflow.set_tracking_uri(f"file://{mlruns_dir.resolve()}")
+
         mlflow.set_experiment(self.experiment_name)
         logger.info(f"[Trainer] Initialized with experiment: {self.experiment_name}")
 
@@ -107,7 +122,7 @@ class ModelTrainer:
             Dictionary with MAE, RMSE, and R² metrics
         """
         mae = float(mean_absolute_error(y_true, y_pred))
-        rmse = float(mean_squared_error(y_true, y_pred, squared=False))
+        rmse = float(mean_squared_error(y_true, y_pred))
         r2 = float(r2_score(y_true, y_pred))
 
         return {
@@ -271,29 +286,39 @@ class ModelTrainer:
                 signature = None
                 input_example = None
 
-            mlflow.sklearn.log_model(
-                sk_model=best_estimator,
-                artifact_path="model",
-                signature=signature,
-                input_example=input_example
-            )
-
+            # Ensure we have a local copy of the model first (always writable)
             model_path = self.models_dir / f"{self.config.model.name}_{target_name}_model.joblib"
             joblib.dump(best_estimator, model_path)
-            logger.info(f"[Save] Model saved to: {model_path}")
+            logger.info(f"[Save] Local model copy saved to: {model_path}")
 
-            mlflow.log_artifact(str(model_path))
+            # Try to use mlflow's sklearn model logger. If the configured
+            # MLflow artifact store is not writable from this environment
+            # (common when a remote server has an artifact root like '/root'),
+            # fall back to logging the saved file as an artifact.
+            try:
+                mlflow.sklearn.log_model(
+                    sk_model=best_estimator,
+                    # artifact_path="model",
+                    signature=signature,
+                    input_example=input_example
+                )
+            except Exception as e:
+                logger.warning(f"mlflow.sklearn.log_model failed: {e}. Falling back to manual artifact logging.")
+                try:
+                    mlflow.log_artifact(str(model_path), artifact_path="model")
+                except Exception as e2:
+                    logger.warning(f"mlflow.log_artifact also failed: {e2}. Model is available locally at {model_path}.")
 
             run_id = run.info.run_id
             logger.info(f"[MLflow] Run ID: {run_id}")
 
         return {
-            "target": target_name,
-            "metrics": metrics,
-            "hpo_results": hpo_results,
-            "run_id": run_id,
-            "model_path": str(model_path)
-        }
+             "target": target_name,
+             "metrics": metrics,
+             "hpo_results": hpo_results,
+             "run_id": run_id,
+             "model_path": str(model_path)
+         }
 
     def train_all_targets(
         self,

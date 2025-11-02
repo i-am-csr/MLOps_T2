@@ -6,9 +6,9 @@ stages:
     cmd: python -m proyecto_final.scripts.run_preprocessing
     deps:
       - ../data/raw/energy_efficiency_modified.csv
-      - proyecto_final/preprocessing/transformers.py
-      - proyecto_final/preprocessing/pipeline.py
-      - proyecto_final/data/preprocessing.py
+      - preprocessing/transformers.py
+      - preprocessing/pipeline.py
+      - data/preprocessing.py
     outs:
       - ../data/interim/energy_efficiency_interim_clean.csv
       - ../data/processed/energy_efficiency_train_prepared.csv
@@ -17,14 +17,15 @@ stages:
       - ../models/encoding_scaling_transformer.joblib
 
   train_xgboost:
-    cmd: python -m proyecto_final.train --config proyecto_final/configs/xgb.yaml --skip-preprocessing
+#    cmd: python -m proyecto_final.train --config configs/xgb.yaml --skip-preprocessing
+    cmd: HOME=$(pwd)/.. python -m proyecto_final.train --config configs/xgb.yaml --skip-preprocessing
     deps:
       - ../data/processed/energy_efficiency_train_prepared.csv
       - ../data/processed/energy_efficiency_test_prepared.csv
-      - proyecto_final/configs/xgb.yaml
-      - proyecto_final/modeling/trainer.py
+      - configs/xgb.yaml
+      - modeling/trainer.py
     params:
-      - proyecto_final/configs/xgb.yaml:
+      - configs/xgb.yaml:
           - model
           - split
           - hpo
@@ -36,14 +37,15 @@ stages:
       - ../models/xgboost_cooling_model.joblib
 
   train_random_forest:
-    cmd: python -m proyecto_final.train --config proyecto_final/configs/rf.yaml --skip-preprocessing
+#    cmd: python -m proyecto_final.train --config configs/rf.yaml --skip-preprocessing
+    cmd: HOME=$(pwd)/.. python -m proyecto_final.train --config configs/rf.yaml --skip-preprocessing
     deps:
       - ../data/processed/energy_efficiency_train_prepared.csv
       - ../data/processed/energy_efficiency_test_prepared.csv
-      - proyecto_final/configs/rf.yaml
-      - proyecto_final/modeling/trainer.py
+      - configs/rf.yaml
+      - modeling/trainer.py
     params:
-      - proyecto_final/configs/rf.yaml:
+      - configs/rf.yaml:
           - model
           - split
           - hpo
@@ -53,4 +55,3 @@ stages:
     outs:
       - ../models/random_forest_heating_model.joblib
       - ../models/random_forest_cooling_model.joblib
-

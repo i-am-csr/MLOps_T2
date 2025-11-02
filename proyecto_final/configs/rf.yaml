@@ -16,7 +16,7 @@ split:
   random_state: 42
 
 hpo:
-  enabled: true
+  enabled: false
   search: random
   cv: 5
   scoring: neg_root_mean_squared_error
