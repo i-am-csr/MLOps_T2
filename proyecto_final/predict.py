@@ -1,73 +1,65 @@
-import argparse, json, os, sys, joblib
-import numpy as np
-import pandas as pd
+from argparse import ArgumentParser
+from json import loads, dumps
+from typing import List
+from pathlib import Path
 
-# TODO: Move variables to config.py
-MODEL_DIR = "../models/xgboost-heating/2025-10-11_21-20-05"
+from numpy import asarray, nan
+from pandas import read_csv, DataFrame
+from mlflow.pyfunc import load_model
 
-def load_signature(model_dir: str):
-    sig_path = os.path.join(model_dir, "signature.json")
-    if not os.path.exists(sig_path):
-        raise FileNotFoundError(f"signature.json not found in {model_dir}")
-    with open(sig_path, "r") as f:
-        return json.load(f)
+from config import (
+    DATA,
+    DEFAULT_MODEL_URI,
+    setup_mlflow,
+    to_numeric_df
+)
 
-def load_model(model_dir: str):
-    mdl_path = os.path.join(model_dir, "model.joblib")
-    if not os.path.exists(mdl_path):
-        raise FileNotFoundError(f"model.joblib not found in {model_dir}")
-    return joblib.load(mdl_path)
-
-def read_input(args):
-    if args.csv:
-        return pd.read_csv(args.csv)
-    if args.json:
-        with open(args.json, "r") as f:
-            payload = json.load(f)
-        rows = payload.get("rows", payload)
-        return pd.DataFrame(rows)
-    
-    payload = json.load(sys.stdin)
-    rows = payload.get("rows", payload)
-    return pd.DataFrame(rows)
-
-def align_columns(df: pd.DataFrame, feature_cols: list[str]):
-    for c in feature_cols:
+def _align(df: DataFrame, features: List[str]) -> DataFrame:
+    for c in features:
         if c not in df.columns:
-            df[c] = np.nan
-    return df[feature_cols]
+            df[c] = nan
+    return df[features]
 
-def predict(model_dir: str, input_df: pd.DataFrame):
-    sig = load_signature(model_dir)
-    if sig.get("task", "regression") != "regression":
-        raise ValueError("This predict script expects a regression model.")
+def _read_input(args) -> DataFrame:
+    if args.csv:
+        return read_csv(args.csv)
+    if args.json:
+        payload = loads(Path(args.json).read_text(encoding = "utf-8"))
+        rows = payload.get("rows", payload)
+        return DataFrame(rows)
+
+class Predictor:
+    def __init__(self, model_uri: str):
+        setup_mlflow()
+        self.model = load_model(model_uri)
+        self.features = DATA.features
+
+    def predict(self, rows: DataFrame | list[dict]) -> list[float]:
+        df = rows if isinstance(rows, DataFrame) else DataFrame(rows)
+        df = _align(df.copy(), self.features)
+        df = to_numeric_df(df)
+        y = self.model.predict(df)
+        return [float(v) for v in asarray(y).ravel().tolist()]
     
-    #TODO: A CSV with preprocessed data is expected. Add features engineering
-    # later.
-    feat_cols = sig["feature_cols"]
-    df = align_columns(input_df.copy(), feat_cols)
-
-    model = load_model(model_dir)
-    y = model.predict(df)
-    return [float(v) for v in np.asarray(y).ravel().tolist()]
-
 def main():
-    ap = argparse.ArgumentParser(description="Predict with a saved regression model (no preprocessing).")
-    ap.add_argument("--csv", help="Input CSV with feature columns matching training signature.")
-    ap.add_argument("--json", help="Input JSON: {'rows': [ {feat: val}, ... ]} or a list of dicts.")
-    ap.add_argument("--out", help="Optional output file to write JSON predictions.")
+    ap = ArgumentParser(description = "Predict from an MLflow model.")
+    ap.add_argument("--model-uri", default = DEFAULT_MODEL_URI, help = "MLflow model URI.")
+    ap.add_argument("--csv", help = "Input CSV")
+    ap.add_argument("--json", help = "JSON file (instead of CSV)")
+    ap.add_argument("--out", help = "Output file for predictions (JSON). Defaults to stdout.")
     args = ap.parse_args()
 
-    #TODO: Add input validation
-    df = read_input(args)
-    preds = predict(MODEL_DIR, df)
-    out_obj = {"predictions": preds}
-    out_s = json.dumps(out_obj, indent=2)
+    if not args.model_uri:
+        raise SystemExit("No model URI provided. DEFAULT_MODEL_URI not set.")
 
+    df = _read_input(args)
+    predictor = Predictor(model_uri = args.model_uri)
+    preds = predictor.predict(df)
+
+    out = {"predictions": preds}
+    out_s = dumps(out, indent = 2)
     if args.out:
-        with open(args.out, "w") as f:
-            f.write(out_s + "\n")
-        print(f"[OK] wrote predictions to {args.out}")
+        Path(args.out).write_text(out_s + "\n", encoding = "utf-8")
     else:
         print(out_s)
 
