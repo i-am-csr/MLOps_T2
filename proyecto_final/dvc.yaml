@@ -13,7 +13,6 @@ stages:
       - ../data/interim/energy_efficiency_interim_clean.csv
       - ../data/processed/energy_efficiency_train_prepared.csv
       - ../data/processed/energy_efficiency_test_prepared.csv
-    artifacts:
       - ../models/initial_cleaning_pipeline.joblib
       - ../models/encoding_scaling_transformer.joblib
 
@@ -32,7 +31,7 @@ stages:
     metrics:
       - ../models/xgboost_metrics.json:
           cache: false
-    artifacts:
+    outs:
       - ../models/xgboost_heating_model.joblib
       - ../models/xgboost_cooling_model.joblib
 
@@ -51,7 +50,7 @@ stages:
     metrics:
       - ../models/random_forest_metrics.json:
           cache: false
-    artifacts:
+    outs:
       - ../models/random_forest_heating_model.joblib
       - ../models/random_forest_cooling_model.joblib
 
