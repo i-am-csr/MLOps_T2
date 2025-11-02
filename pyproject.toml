@@ -242,7 +242,7 @@ dependencies = [
     "webcolors==24.11.1",
     "webencodings==0.5.1",
     "websocket-client==1.8.0",
-    "xgboost>=3.0.5",
+    "xgboost>=3.1.1",
     "yarl==1.21.0",
     "zc-lockfile==4.0",
 ]
