@@ -1,0 +1,57 @@
+# DVC Pipeline Configuration
+# This file defines the complete ML pipeline with dependencies and outputs
+
+stages:
+  preprocessing:
+    cmd: python -m proyecto_final.scripts.run_preprocessing
+    deps:
+      - ../data/raw/energy_efficiency_modified.csv
+      - proyecto_final/preprocessing/transformers.py
+      - proyecto_final/preprocessing/pipeline.py
+      - proyecto_final/data/preprocessing.py
+    outs:
+      - ../data/interim/energy_efficiency_interim_clean.csv
+      - ../data/processed/energy_efficiency_train_prepared.csv
+      - ../data/processed/energy_efficiency_test_prepared.csv
+    artifacts:
+      - ../models/initial_cleaning_pipeline.joblib
+      - ../models/encoding_scaling_transformer.joblib
+
+  train_xgboost:
+    cmd: python -m proyecto_final.train --config proyecto_final/configs/xgb.yaml --skip-preprocessing
+    deps:
+      - ../data/processed/energy_efficiency_train_prepared.csv
+      - ../data/processed/energy_efficiency_test_prepared.csv
+      - proyecto_final/configs/xgb.yaml
+      - proyecto_final/modeling/trainer.py
+    params:
+      - proyecto_final/configs/xgb.yaml:
+          - model
+          - split
+          - hpo
+    metrics:
+      - ../models/xgboost_metrics.json:
+          cache: false
+    artifacts:
+      - ../models/xgboost_heating_model.joblib
+      - ../models/xgboost_cooling_model.joblib
+
+  train_random_forest:
+    cmd: python -m proyecto_final.train --config proyecto_final/configs/rf.yaml --skip-preprocessing
+    deps:
+      - ../data/processed/energy_efficiency_train_prepared.csv
+      - ../data/processed/energy_efficiency_test_prepared.csv
+      - proyecto_final/configs/rf.yaml
+      - proyecto_final/modeling/trainer.py
+    params:
+      - proyecto_final/configs/rf.yaml:
+          - model
+          - split
+          - hpo
+    metrics:
+      - ../models/random_forest_metrics.json:
+          cache: false
+    artifacts:
+      - ../models/random_forest_heating_model.joblib
+      - ../models/random_forest_cooling_model.joblib
+

@@ -1,67 +1,148 @@
+"""
+Main prediction script with complete preprocessing pipeline.
+
+This script loads trained models and preprocessing pipelines to make
+predictions on new data.
+
+Usage:
+    python predict.py --input data.csv --target heating --output predictions.json
+    python predict.py --input data.csv --target both --output predictions.json
+"""
+
 from argparse import ArgumentParser
 from json import loads, dumps
-from typing import List
 from pathlib import Path
 
-from numpy import asarray, nan
-from pandas import read_csv, DataFrame
-from mlflow.pyfunc import load_model
+import pandas as pd
+from loguru import logger
 
-from config import (
-    DATA,
-    DEFAULT_MODEL_URI,
-    setup_mlflow,
-    to_numeric_df
-)
+from proyecto_final.config import MODELS_DIR
+from proyecto_final.modeling.predictor import Predictor, MultiTargetPredictor
 
-def _align(df: DataFrame, features: List[str]) -> DataFrame:
-    for c in features:
-        if c not in df.columns:
-            df[c] = nan
-    return df[features]
 
-def _read_input(args) -> DataFrame:
-    if args.csv:
-        return read_csv(args.csv)
-    if args.json:
-        payload = loads(Path(args.json).read_text(encoding = "utf-8"))
-        rows = payload.get("rows", payload)
-        return DataFrame(rows)
+def load_input_data(csv_path: str = None, json_path: str = None) -> pd.DataFrame:
+    """
+    Load input data from CSV or JSON file.
 
-class Predictor:
-    def __init__(self, model_uri: str):
-        setup_mlflow()
-        self.model = load_model(model_uri)
-        self.features = DATA.features
+    Args:
+        csv_path: Path to CSV file
+        json_path: Path to JSON file
 
-    def predict(self, rows: DataFrame | list[dict]) -> list[float]:
-        df = rows if isinstance(rows, DataFrame) else DataFrame(rows)
-        df = _align(df.copy(), self.features)
-        df = to_numeric_df(df)
-        y = self.model.predict(df)
-        return [float(v) for v in asarray(y).ravel().tolist()]
-    
+    Returns:
+        DataFrame with input data
+
+    Raises:
+        ValueError: If neither csv_path nor json_path is provided
+    """
+    if csv_path:
+        logger.info(f"Loading input from CSV: {csv_path}")
+        return pd.read_csv(csv_path)
+    elif json_path:
+        logger.info(f"Loading input from JSON: {json_path}")
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = loads(f.read())
+        rows = data.get("rows", data)
+        return pd.DataFrame(rows)
+    else:
+        raise ValueError("Either --csv or --json must be provided")
+
+
 def main():
-    ap = ArgumentParser(description = "Predict from an MLflow model.")
-    ap.add_argument("--model-uri", default = DEFAULT_MODEL_URI, help = "MLflow model URI.")
-    ap.add_argument("--csv", help = "Input CSV")
-    ap.add_argument("--json", help = "JSON file (instead of CSV)")
-    ap.add_argument("--out", help = "Output file for predictions (JSON). Defaults to stdout.")
+    """
+    Main prediction pipeline.
+
+    Steps:
+        1. Parse command-line arguments
+        2. Load input data
+        3. Load models and preprocessing pipelines
+        4. Make predictions
+        5. Save results
+    """
+    ap = ArgumentParser(description="Make predictions using trained models.")
+    ap.add_argument(
+        "--input",
+        required=True,
+        help="Path to input CSV file"
+    )
+    ap.add_argument(
+        "--target",
+        choices=["heating", "cooling", "both"],
+        default="both",
+        help="Target to predict (default: both)"
+    )
+    ap.add_argument(
+        "--model-name",
+        default="xgboost",
+        help="Model name prefix (default: xgboost)"
+    )
+    ap.add_argument(
+        "--output",
+        help="Output file for predictions (JSON). If not provided, prints to stdout"
+    )
     args = ap.parse_args()
 
-    if not args.model_uri:
-        raise SystemExit("No model URI provided. DEFAULT_MODEL_URI not set.")
+    logger.info("=" * 70)
+    logger.info("ENERGY EFFICIENCY MODEL PREDICTION PIPELINE")
+    logger.info("=" * 70)
 
-    df = _read_input(args)
-    predictor = Predictor(model_uri = args.model_uri)
-    preds = predictor.predict(df)
+    df_input = load_input_data(csv_path=args.input)
+    logger.info(f"Loaded {len(df_input)} samples")
 
-    out = {"predictions": preds}
-    out_s = dumps(out, indent = 2)
-    if args.out:
-        Path(args.out).write_text(out_s + "\n", encoding = "utf-8")
+    preprocessing_pipeline_path = MODELS_DIR / "initial_cleaning_pipeline.joblib"
+    transformer_path = MODELS_DIR / "encoding_scaling_transformer.joblib"
+
+    if args.target == "both":
+        logger.info("[Predict] Using MultiTargetPredictor for both targets")
+
+        model_paths = {
+            "heating": MODELS_DIR / f"{args.model_name}_heating_model.joblib",
+            "cooling": MODELS_DIR / f"{args.model_name}_cooling_model.joblib"
+        }
+
+        predictor = MultiTargetPredictor(
+            model_paths=model_paths,
+            preprocessing_pipeline_path=preprocessing_pipeline_path,
+            transformer_path=transformer_path
+        )
+
+        predictions = predictor.predict_dict(df_input)
+
     else:
-        print(out_s)
+        logger.info(f"[Predict] Using single Predictor for target: {args.target}")
+
+        model_path = MODELS_DIR / f"{args.model_name}_{args.target}_model.joblib"
+
+        predictor = Predictor(
+            model_path=model_path,
+            preprocessing_pipeline_path=preprocessing_pipeline_path,
+            transformer_path=transformer_path
+        )
+
+        predictions_series = predictor.predict(df_input)
+        predictions = [{args.target: float(p)} for p in predictions_series]
+
+    logger.info(f"[Predict] Generated {len(predictions)} predictions")
+
+    output_data = {
+        "target": args.target,
+        "num_predictions": len(predictions),
+        "predictions": predictions
+    }
+
+    output_json = dumps(output_data, indent=2)
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(output_json + "\n", encoding="utf-8")
+        logger.info(f"[Save] Predictions saved to: {args.output}")
+    else:
+        print(output_json)
+
+    logger.info("=" * 70)
+    logger.info("PREDICTION PIPELINE COMPLETE")
+    logger.info("=" * 70)
+
 
 if __name__ == "__main__":
     main()

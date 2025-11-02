@@ -1,157 +1,149 @@
+"""
+Main training script with complete preprocessing and MLflow integration.
+
+This script orchestrates the complete machine learning workflow:
+1. Data loading and preprocessing
+2. Feature engineering
+3. Model training with hyperparameter optimization
+4. MLflow experiment tracking
+5. Model and artifact saving
+
+Usage:
+    python train.py --config configs/xgb.yaml --run-name my_experiment
+"""
+
 from argparse import ArgumentParser
 from json import dumps
-from typing import Dict, Optional
 
-from numpy import sqrt
-from pandas import DataFrame, read_csv, to_numeric
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.ensemble import RandomForestRegressor
+from loguru import logger
 
-from config import (
-    DATA,
+from proyecto_final.config import (
+    RAW_DATA_DIR,
+    INTERIM_DATA_DIR,
+    PROCESSED_DATA_DIR,
+    MODELS_DIR,
     MLFLOW,
-    TrainConfig,
+    DATA,
     train_config_from_yaml,
-    nowstamp,
-    setup_mlflow,
-    to_numeric_df
+    setup_mlflow
 )
+from proyecto_final.data.data_loader import DataLoader
+from proyecto_final.data.preprocessing import PreprocessingOrchestrator
+from proyecto_final.modeling.trainer import ModelTrainer
 
-try:
-    from xgboost import XGBRegressor
-    _HAS_XGB = True
-except ImportError:
-    _HAS_XGB = False
-
-from mlflow import start_run, log_params, log_metrics
-from mlflow.sklearn import log_model
-from mlflow.models.signature import infer_signature
-
-def regression_metrics(y_true, y_pred) -> Dict[str, float]:
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    rmse = float(sqrt(mean_squared_error(y_true, y_pred)))
-    r2   = float(r2_score(y_true, y_pred))
-    return {"mae": mae, "rmse": rmse, "r2": r2}
-
-def make_estimator(library: str, params: Dict):
-    if library == "sklearn":
-        return RandomForestRegressor(**params)
-    elif library == "xgboost_sklearn":
-        if not _HAS_XGB:
-            raise RuntimeError("XGBoost not installed")
-        return XGBRegressor(**params)
-    else:
-        raise ValueError(f"Unsupported library: {library}")
-    
-class Trainer:
-    def __init__(self, cfg: TrainConfig, run_name: Optional[str] = None):
-        self.cfg = cfg
-        self.stamp = run_name or nowstamp()
-        setup_mlflow()
-
-    def _load_df(self) -> DataFrame:
-        df = read_csv(DATA.csv_path)
-        req = DATA.features + list(DATA.targets.values())
-        missing = [c for c in req if c not in df.columns]
-        if missing:
-            raise ValueError(f"Missing columns in input: {missing}")
-        return df
-    
-    def _split(self, df: DataFrame, target_col: str):
-        X = to_numeric_df(df[DATA.features])
-        y = to_numeric(df[target_col], errors="coerce")
-        return train_test_split(
-            X, y,
-            test_size=self.cfg.split.test_size,
-            random_state=self.cfg.split.random_state
-        )
-    
-    def _train(self, est, Xtr, ytr):
-        h = self.cfg.hpo
-        if not h.enabled:
-            est.fit(Xtr, ytr)
-            return est, None
-
-        grid = h.param_grid or {}
-        if h.search == "grid":
-            search = GridSearchCV(
-                est, param_grid = grid, cv = h.cv,
-                scoring = h.scoring, n_jobs = h.n_jobs, refit = True, verbose = 1
-            )
-        else:
-            search = RandomizedSearchCV(
-                est, param_distributions = grid, n_iter = h.n_iter, cv = h.cv,
-                scoring = h.scoring, n_jobs = h.n_jobs, random_state = self.cfg.split.random_state,
-                refit = True, verbose = 1
-            )
-        search.fit(Xtr, ytr)
-        return search.best_estimator_, {
-            "best_score": float(search.best_score_),
-            "best_params": search.best_params_,
-        }
-    
-    def train_target(self, label: str, target_col: str):
-        df = self._load_df()
-        Xtr, Xte, ytr, yte = self._split(df, target_col)
-
-        base = make_estimator(self.cfg.model.library, self.cfg.model.params)
-        final_est, hpo = self._train(base, Xtr, ytr)
-        yhat = final_est.predict(Xte)
-        met = regression_metrics(yte, yhat)
-
-        run_name = f"{self.cfg.model.name}-{label}:{self.stamp}"
-        with start_run(run_name = run_name):
-            flat_params = {f"model__{k}": v for k, v in self.cfg.model.params.items()
-                           if isinstance(v, (int, float, str, bool, type(None)))}
-            log_params({
-                **flat_params,
-                "library": self.cfg.model.library,
-                "model_name": self.cfg.model.name,
-                "target": target_col,
-                "split_test_size": self.cfg.split.test_size,
-                "split_random_state": self.cfg.split.random_state,
-            })
-            if hpo:
-                log_params({f"hpo_best__{k}": v for k, v in hpo["best_params"].items()})
-                log_metrics("hpo_best_cv_score", hpo["best_score"])
-            log_metrics(met)
-
-            try:
-                sig = infer_signature(Xte, yhat)
-                example = Xte.head(2)
-            except Exception:
-                sig, example = None, None
-
-            log_model(
-                sk_model = final_est,
-                artifact_path = "model",
-                signature = sig,
-                input_example = example,
-                registered_model_name = (MLFLOW.register_name or None),
-            )
-
-        print(f"Model run: {run_name}")
-        print(f"Metrics: {dumps(met)}")
-
-        return {"metrics": met, "hpo": hpo}
-
-    def train_all(self):
-        results = {}
-        for label, target_col in DATA.targets.items():
-            results[label] = self.train_target(label, target_col)
-        return results
 
 def main():
-    ap = ArgumentParser(description="Train model.")
-    ap.add_argument("--config", required=True, help="YAML with model/split/hpo(optional) parameters only")
-    ap.add_argument("--run-name", default=None, help="Optional run name (else timestamp)")
+    """
+    Main training pipeline.
+
+    Steps:
+        1. Parse command-line arguments
+        2. Setup MLflow tracking
+        3. Load and preprocess data
+        4. Train models for all targets
+        5. Log results and save artifacts
+    """
+    ap = ArgumentParser(description="Train Energy Efficiency models with complete pipeline.")
+    ap.add_argument(
+        "--config",
+        required=True,
+        help="Path to YAML config file (e.g., configs/xgb.yaml)"
+    )
+    ap.add_argument(
+        "--run-name",
+        default=None,
+        help="Optional custom run name (default: timestamp)"
+    )
+    ap.add_argument(
+        "--skip-preprocessing",
+        action="store_true",
+        help="Skip preprocessing and use existing processed data"
+    )
     args = ap.parse_args()
 
-    cfg = train_config_from_yaml(args.config)
-    trainer = Trainer(cfg, run_name=args.run_name)
-    out = trainer.train_all()
-    print(dumps(out, indent=2))
+    logger.info("=" * 70)
+    logger.info("ENERGY EFFICIENCY MODEL TRAINING PIPELINE")
+    logger.info("=" * 70)
+
+    setup_mlflow()
+    logger.info(f"MLflow tracking URI: {MLFLOW.tracking_uri}")
+    logger.info(f"MLflow experiment: {MLFLOW.experiment}")
+
+    config = train_config_from_yaml(args.config)
+    logger.info(f"Model: {config.model.name}")
+    logger.info(f"Library: {config.model.library}")
+    logger.info(f"HPO enabled: {config.hpo.enabled}")
+
+    if not args.skip_preprocessing:
+        logger.info("[Pipeline] Running preprocessing...")
+
+        raw_data_file = RAW_DATA_DIR / "energy_efficiency_modified.csv"
+
+        orchestrator = PreprocessingOrchestrator(
+            raw_data_path=raw_data_file,
+            interim_path=INTERIM_DATA_DIR,
+            processed_path=PROCESSED_DATA_DIR,
+            models_path=MODELS_DIR,
+            test_size=config.split.test_size,
+            random_state=config.split.random_state
+        )
+
+        # Definir features y targets (basado en análisis EDA)
+        # Nota: X2, X4 excluidos por alta correlación con X1, X3
+        numeric_features = ["X1", "X3", "X5", "X7"]
+        categorical_features = ["X6", "X8"]
+        all_features = numeric_features + categorical_features
+        targets = ["Y1", "Y2"]
+        
+        # Para limpieza inicial: features + targets
+        all_numeric_cols = numeric_features + targets
+        
+        X_train, X_test, y_train, y_test = orchestrator.run_complete_workflow(
+            numeric_cols=all_numeric_cols,
+            categorical_cols=categorical_features,
+            feature_cols=all_features,
+            target_cols=targets,
+            numeric_feature_cols=numeric_features,
+            categorical_feature_cols=categorical_features
+        )
+    else:
+        logger.info("[Pipeline] Loading preprocessed data...")
+
+        train_file = PROCESSED_DATA_DIR / "energy_efficiency_train_prepared.csv"
+        test_file = PROCESSED_DATA_DIR / "energy_efficiency_test_prepared.csv"
+
+        train_data = DataLoader.load_csv(train_file)
+        test_data = DataLoader.load_csv(test_file)
+
+        feature_cols = [c for c in train_data.columns if c not in ["Y1", "Y2"]]
+        X_train = train_data[feature_cols]
+        y_train = train_data[["Y1", "Y2"]]
+        X_test = test_data[feature_cols]
+        y_test = test_data[["Y1", "Y2"]]
+
+    trainer = ModelTrainer(
+        config=config,
+        experiment_name=MLFLOW.experiment,
+        models_dir=MODELS_DIR
+    )
+
+    results = trainer.train_all_targets(
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+        target_mapping=DATA.targets
+    )
+
+    logger.info("=" * 70)
+    logger.info("TRAINING PIPELINE COMPLETE")
+    logger.info("=" * 70)
+    logger.info("Results summary:")
+    print(dumps(
+        {k: {"metrics": v["metrics"]} for k, v in results.items()},
+        indent=2
+    ))
+
 
 if __name__ == "__main__":
     main()
