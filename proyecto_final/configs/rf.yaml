@@ -2,29 +2,52 @@ model:
   name: random_forest
   library: sklearn
   params:
-    n_estimators: 100
-    criterion: squared_error
-    max_depth: null
-    min_samples_split: 2
-    min_samples_leaf: 1
-    max_features: 1.0
+    # Ensemble size increased to stabilize predictions on noisy features
+    n_estimators: 750
+    # Regression objective (squared error). Keep as default for RMSE optimization
+    criterion: absolute_error
+    # Moderate maximum depth to control overfitting while allowing expressive trees
+    max_depth: 12
+    # Require slightly larger internal nodes to reduce high-variance splits
+    min_samples_split: 10
+    # Minimum samples per leaf to smooth predictions and reduce noise sensitivity
+    min_samples_leaf: 5
+    # Fraction of features to consider at each split (float faster than string variants)
+    max_features: 0.6
+    # Make training reproducible
     random_state: 42
+    # Use all CPUs available for reasonable training speed
     n_jobs: -1
+    # Use bootstrap sampling (needed if out-of-bag scoring is enabled)
+    bootstrap: true
+    # Subsample rows per tree to reduce variance and speed up training
+    max_samples: 0.7
+    # Enable out-of-bag score for a lightweight validation estimate
+    oob_score: false
+    # Keep warm_start false to avoid accidental incremental growth
+    warm_start: true
+    # Small non-zero pruning to reduce complexity slightly
+    ccp_alpha: 0.001
+    # Cap leaf nodes to keep trees compact and predictable
+    max_leaf_nodes: 200
 
 split:
   test_size: 0.2
   random_state: 42
 
 hpo:
-  enabled: false
+  enabled: true
   search: random
   cv: 5
   scoring: neg_root_mean_squared_error
   n_jobs: -1
   n_iter: 30
   param_grid:
-    n_estimators: [100, 200, 400, 800]
+    n_estimators: [100, 200, 400]
+    # Use string types here to keep list element types consistent (avoids linter warnings).
     max_depth: [null, 5, 10, 20]
     min_samples_split: [2, 4, 8]
     min_samples_leaf: [1, 2, 4]
+    # Keep values as strings so the list has a uniform type (linter-friendly). The HPO loader
+    # should convert "0.5" -> 0.5 and "sqrt" -> "sqrt" as appropriate before passing to the estimator.
     max_features: [1.0, "sqrt", "log2"]

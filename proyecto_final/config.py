@@ -6,7 +6,10 @@ from loguru import logger
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Literal
 from time import strftime
+
+from mlflow import MlflowClient
 from pandas import DataFrame, to_numeric
+import os
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -28,7 +31,11 @@ FIGURES_DIR = REPORTS_DIR / "figures"
 
 MLFLOW_SERVER_IP = "138.68.15.126"
 MLFLOW_SERVER_PORT = 5050
-MLFLOW_TRACKING_URI = f"http://{MLFLOW_SERVER_IP}:{MLFLOW_SERVER_PORT}"
+# MLFLOW_TRACKING_URI = f"http://{MLFLOW_SERVER_IP}:{MLFLOW_SERVER_PORT}"
+MLFLOW_TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    f"http://{MLFLOW_SERVER_IP}:{MLFLOW_SERVER_PORT}"
+)
 
 DEFAULT_MODEL_URI: Optional[str] = None
 
@@ -118,14 +125,39 @@ def train_config_from_yaml(path: str) -> TrainConfig:
     )
 
 def setup_mlflow():
-    try:
-        import mlflow
-    except Exception as e:
-        raise RuntimeError("MLFlow not installed.") from e
-    if MLFLOW.tracking_uri:
-        mlflow.set_tracking_uri(MLFLOW.tracking_uri)
+    """
+    Configura MLflow, usando un servidor remoto si está disponible.
+    """
+    import mlflow
+    from loguru import logger
+    from pathlib import Path
+
+    tracking_uri = MLFLOW_TRACKING_URI.strip()
+
+    # Si es un servidor remoto (http/https)
+    if tracking_uri.startswith("http"):
+        mlflow.set_tracking_uri(tracking_uri)
+        logger.info(f"[MLflow] Usando servidor remoto: {tracking_uri}")
+    else:
+        # Ruta local
+        tracking_path = Path(tracking_uri.replace("file://", ""))
+        tracking_path.mkdir(parents=True, exist_ok=True)
+        resolved_uri = f"file:{tracking_path.resolve()}"
+        mlflow.set_tracking_uri(resolved_uri)
+        logger.info(f"[MLflow] Usando tracking local: {resolved_uri}")
+
+    # Configurar experimento
     if MLFLOW.experiment:
+        client = MlflowClient()
+        exp = client.get_experiment_by_name(MLFLOW.experiment)
+        if exp is None:
+            client.create_experiment(
+                name=MLFLOW.experiment,
+                artifact_location="mlflow-artifacts:/"
+            )
         mlflow.set_experiment(MLFLOW.experiment)
+        logger.info(f"[MLflow] Experimento activo: {MLFLOW.experiment}")
+
 
 def to_numeric_df(df: DataFrame) -> DataFrame:
     return df.apply(to_numeric, errors="coerce")

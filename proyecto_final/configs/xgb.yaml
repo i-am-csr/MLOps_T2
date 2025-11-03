@@ -2,10 +2,40 @@ model:
   name: xgboost
   library: xgboost_sklearn
   params:
+    # Objective for regression
     objective: reg:squarederror
-    n_estimators: 100
+    # Booster type: gradient-boosted trees (standard)
+    booster: gbtree
+    # Number of boosting rounds (increased for potential better fit; pair with lower learning_rate)
+    n_estimators: 400
+    # Conservative learning rate to improve generalization; consider using early stopping
+    learning_rate: 0.02
+    # Maximum depth of a tree. Keep moderate to avoid overfitting
+    max_depth: 8
+    # Minimum sum of instance weight (hessian) needed in a child
+    min_child_weight: 1
+    # Subsample ratio of the training instance
+    subsample: 0.9
+    # Subsample ratio of columns when constructing each tree
+    colsample_bytree: 0.8
+    # Subsample ratio of columns for each split, in each level
+    colsample_bylevel: 0.7
+    # Minimum loss reduction required to make a further partition on a leaf node
+    gamma: 0.05
+    # L1 regularization term on weights
+    reg_alpha: 0.0
+    # L2 regularization term on weights
+    reg_lambda: 1.5
+    # Use histogram algorithm for faster training on larger datasets
+    tree_method: hist
+    # Speed/verbosity control (0 = silent, 1 = warning, 2 = info)
+    verbosity: 1
+    # Seed for reproducibility
+    seed: 2025
     random_state: 42
+    # Parallelism
     n_jobs: -1
+
 
 split:
   test_size: 0.2
@@ -19,7 +49,7 @@ hpo:
   n_jobs: -1
   n_iter: 30
   param_grid:
-    n_estimators: [100, 200, 400, 800]
+    n_estimators: [100, 200, 400]
     learning_rate: [0.05, 0.1, 0.2]
     max_depth: [3, 6, 8]
     min_child_weight: [1, 5, 10]

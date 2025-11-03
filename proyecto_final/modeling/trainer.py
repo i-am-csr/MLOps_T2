@@ -16,6 +16,7 @@ from loguru import logger
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+import traceback
 
 try:
     from xgboost import XGBRegressor
@@ -239,78 +240,88 @@ class ModelTrainer:
         run_name = run_name or f"{self.config.model.name}-{target_name}"
 
         with mlflow.start_run(run_name=run_name) as run:
-            mlflow.set_tag("target", target_name)
-            mlflow.set_tag("model_library", self.config.model.library)
-
-            base_estimator = self._create_estimator()
-
-            best_estimator, hpo_results = self._run_hyperparameter_optimization(
-                base_estimator, X_train, y_train
-            )
-
-            y_pred = best_estimator.predict(X_test)
-            metrics = self._compute_metrics(y_test, y_pred)
-
-            logger.info(f"[Metrics] MAE: {metrics['mae']:.4f}")
-            logger.info(f"[Metrics] RMSE: {metrics['rmse']:.4f}")
-            logger.info(f"[Metrics] R²: {metrics['r2']:.4f}")
-
-            flat_params = {
-                f"model__{k}": v
-                for k, v in self.config.model.params.items()
-                if isinstance(v, (int, float, str, bool, type(None)))
-            }
-
-            mlflow.log_params({
-                **flat_params,
-                "test_size": self.config.split.test_size,
-                "random_state": self.config.split.random_state,
-                "hpo_enabled": self.config.hpo.enabled
-            })
-
-            if hpo_results:
-                mlflow.log_params({
-                    f"hpo_best__{k}": v
-                    for k, v in hpo_results["best_params"].items()
-                })
-                mlflow.log_metric("hpo_best_cv_score", hpo_results["best_cv_score"])
-
-            mlflow.log_metrics(metrics)
-
             try:
-                from mlflow.models.signature import infer_signature
-                signature = infer_signature(X_test, y_pred)
-                input_example = X_test.head(2)
-            except Exception as e:
-                logger.warning(f"Could not infer signature: {e}")
-                signature = None
-                input_example = None
+                mlflow.set_tag("target", target_name)
+                mlflow.set_tag("model_library", self.config.model.library)
 
-            # Ensure we have a local copy of the model first (always writable)
-            model_path = self.models_dir / f"{self.config.model.name}_{target_name}_model.joblib"
-            joblib.dump(best_estimator, model_path)
-            logger.info(f"[Save] Local model copy saved to: {model_path}")
+                base_estimator = self._create_estimator()
 
-            # Try to use mlflow's sklearn model logger. If the configured
-            # MLflow artifact store is not writable from this environment
-            # (common when a remote server has an artifact root like '/root'),
-            # fall back to logging the saved file as an artifact.
-            try:
-                mlflow.sklearn.log_model(
-                    sk_model=best_estimator,
-                    # artifact_path="model",
-                    signature=signature,
-                    input_example=input_example
+                best_estimator, hpo_results = self._run_hyperparameter_optimization(
+                    base_estimator, X_train, y_train
                 )
-            except Exception as e:
-                logger.warning(f"mlflow.sklearn.log_model failed: {e}. Falling back to manual artifact logging.")
-                try:
-                    mlflow.log_artifact(str(model_path), artifact_path="model")
-                except Exception as e2:
-                    logger.warning(f"mlflow.log_artifact also failed: {e2}. Model is available locally at {model_path}.")
 
-            run_id = run.info.run_id
-            logger.info(f"[MLflow] Run ID: {run_id}")
+                y_pred = best_estimator.predict(X_test)
+                metrics = self._compute_metrics(y_test, y_pred)
+
+                logger.info(f"[Metrics] MAE: {metrics['mae']:.4f}")
+                logger.info(f"[Metrics] RMSE: {metrics['rmse']:.4f}")
+                logger.info(f"[Metrics] R²: {metrics['r2']:.4f}")
+
+                flat_params = {
+                    f"model__{k}": v
+                    for k, v in self.config.model.params.items()
+                    if isinstance(v, (int, float, str, bool, type(None)))
+                }
+
+                mlflow.log_params({
+                    **flat_params,
+                    "test_size": self.config.split.test_size,
+                    "random_state": self.config.split.random_state,
+                    "hpo_enabled": self.config.hpo.enabled
+                })
+
+                if hpo_results:
+                    mlflow.log_params({
+                        f"hpo_best__{k}": v
+                        for k, v in hpo_results["best_params"].items()
+                    })
+                    mlflow.log_metric("hpo_best_cv_score", hpo_results["best_cv_score"])
+
+                mlflow.log_metrics(metrics)
+
+                try:
+                    from mlflow.models.signature import infer_signature
+                    signature = infer_signature(X_test, y_pred)
+                    input_example = X_test.head(2)
+                except Exception as e:
+                    logger.warning(f"Could not infer signature: {e}")
+                    signature = None
+                    input_example = None
+
+                # Ensure we have a local copy of the model first (always writable)
+                model_path = self.models_dir / f"{self.config.model.name}_{target_name}_model.joblib"
+                joblib.dump(best_estimator, model_path)
+                logger.info(f"[Save] Local model copy saved to: {model_path}")
+
+                # Try to use mlflow's sklearn model logger. If the configured
+                # MLflow artifact store is not writable from this environment
+                # (common when a remote server has an artifact root like '/root'),
+                # fall back to logging the saved file as an artifact.
+                print("artifact_uri:", mlflow.get_artifact_uri()+",.")
+                try:
+                    mlflow.sklearn.log_model(
+                        sk_model=best_estimator,
+                        # artifact_path="model",
+                        # name=self.config.model.name,
+                        signature=signature,
+                        input_example=input_example
+                    )
+                except Exception as e:
+                    logger.warning(f"mlflow.sklearn.log_model failed: {e}. Falling back to manual artifact logging.")
+                    try:
+                        mlflow.log_artifact(str(model_path), artifact_path="model")
+                    except Exception as e2:
+                        logger.warning(f"mlflow.log_artifact also failed: {e2}. Model is available locally at {model_path}.")
+
+                run_id = run.info.run_id
+                logger.info(f"[MLflow] Run ID: {run_id}")
+            except Exception as e:
+                mlflow.set_tag("train_status", "error")
+                mlflow.log_param("failure_reason", str(e)[:250])
+                mlflow.log_text(traceback.format_exc(), f"failures/{self.config.model.name}_trace.txt")
+                # re-raise if you want the outer pipeline to fail;
+                # if you want the parent run to succeed even if a child fails, DO NOT re-raise here.
+                raise
 
         return {
              "target": target_name,
