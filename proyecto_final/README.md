@@ -448,6 +448,18 @@ Si estás migrando desde `pip` + `requirements.txt`, `uv` puede leer `pyproject.
 
 ---
 
+##  Modelo en Servicio (API)
+
+El modelo seleccionado se sirve a través de una API de FastAPI.
+
+- **Modelo Calefacción:** `models:/xgb_heating_load_model/Production` (o la versión que estés usando)
+- **Modelo Refrigeración:** `models:/xgb_cooling_load_model/Production` (o la versión que estés usando)
+- **Documentación (Swagger):** `http://<host>:8000/docs`
+- **Endpoint (Single):** `POST /predict`
+- **Endpoint (Batch):** `POST /predict_batch`
+
+---
+
 ## 📖 Referencias
 
 - [Dataset UCI](https://archive.ics.uci.edu/dataset/242/energy+efficiency)
