@@ -448,6 +448,37 @@ Si estás migrando desde `pip` + `requirements.txt`, `uv` puede leer `pyproject.
 
 ---
 
+## Orquestación
+
+**Schema de entrada/salida de la API**
+...
+
+**Modelo y artefactos**
+
+- Artefacto principal del modelo:
+  - `models:/energy-efficiency/xgboost/0.1.0`
+
+- Archivos empaquetados en la imagen Docker bajo `/app/models`:
+  - `initial_cleaning_pipeline.pkl`
+  - `encoding_scaling_transformer.pkl`
+  - `xgboost_heating_model.pkl`
+  - `xgboost_cooling_model.pkl`
+
+### Construcción y ejecución del contenedor
+
+ - Construir la imagen
+docker build -t ml-service:latest .
+
+ - Ejecutar el contenedor
+docker run --rm -p 8000:8000 ml-service:latest
+
+### Imágenes Docker (Docker Hub)
+
+Las imágenes se publican en Docker Hub bajo:
+
+- `<user>/ml-service:0.1.0` – primera versión estable del servicio
+- `<user>/ml-service:latest` – alias a la versión estable más reciente.
+
 ## 📖 Referencias
 
 - [Dataset UCI](https://archive.ics.uci.edu/dataset/242/energy+efficiency)

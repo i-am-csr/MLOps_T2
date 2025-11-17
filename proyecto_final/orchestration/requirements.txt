@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+
+pandas
+scikit-learn
+xgboost
+joblib
+loguru
+
+pydantic<2.0
