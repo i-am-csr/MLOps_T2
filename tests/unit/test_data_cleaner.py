@@ -16,7 +16,6 @@ def test_coerce_numeric(dummy_dataframe: pd.DataFrame, dummy_cleaning_config: Cl
     
     # 'invalid' debería ser forzado a NaN
     assert pd.isna(cleaner.df.loc[0, "X1"])
-    # CORRECCIÓN para permitir int64 o float64, ya que pandas puede mantener int64.
     assert cleaner.df["X8"].dtype in [np.dtype('float64'), np.dtype('int64')]
 
 def test_drop_missing_values(dummy_dataframe: pd.DataFrame, dummy_cleaning_config: CleaningConfig):

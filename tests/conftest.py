@@ -1,4 +1,4 @@
-# tests/conftest.py (CORREGIDO)
+# tests/conftest.py
 
 import pytest
 import pandas as pd
@@ -126,7 +126,6 @@ def mock_predictor(monkeypatch) -> None:
         class MockTransformer(BaseEstimator, TransformerMixin):
             def fit(self, X, y=None): return self
             def transform(self, X): 
-                # CORRECCIÓN para evitar ValueError: Shape of passed values is (N, X), indices imply (N, 6)
                 N = X.shape[0]
                 return np.arange(N * 6).reshape(N, 6) 
             def get_feature_names_out(self): 
@@ -181,7 +180,7 @@ def mock_predictor(monkeypatch) -> None:
     # 4. Mockear dependencias externas
     def mock_dump(*args, **kwargs): pass
     
-    # CORRECCIÓN: Usar un iterador para joblib.load para devolver los 3 objetos mockeados en orden (model, pipeline, transformer).
+    # Usar un iterador para joblib.load para devolver los 3 objetos mockeados en orden (model, pipeline, transformer).
     mock_model = MockPredictorImpl.MockModel()
     mock_pipeline = MockPredictorImpl.PassThroughTransformer()
     mock_transformer = MockPredictorImpl.MockTransformer()
@@ -193,7 +192,7 @@ def mock_predictor(monkeypatch) -> None:
     monkeypatch.setattr("joblib.load", mock_load)
     monkeypatch.setattr("joblib.dump", mock_dump)
 
-    # Mock MLflow para evitar comunicación con el servidor (ya corregido)
+    # Mock MLflow para evitar comunicación con el servidor 
     class MockMLflow:
         def start_run(self, *args, **kwargs):
             class MockRunInfo: run_id = "mock_run_id_123"
