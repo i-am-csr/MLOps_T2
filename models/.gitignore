@@ -2,3 +2,5 @@
 /xgboost_cooling_model.joblib
 /random_forest_heating_model.joblib
 /random_forest_cooling_model.joblib
+/initial_cleaning_pipeline.joblib
+/encoding_scaling_transformer.joblib

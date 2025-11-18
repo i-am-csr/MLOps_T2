@@ -297,7 +297,7 @@ class ModelTrainer:
                 # MLflow artifact store is not writable from this environment
                 # (common when a remote server has an artifact root like '/root'),
                 # fall back to logging the saved file as an artifact.
-                print("artifact_uri:", mlflow.get_artifact_uri()+",.")
+                print("artifact_uri:", mlflow.get_artifact_uri())
                 try:
                     mlflow.sklearn.log_model(
                         sk_model=best_estimator,

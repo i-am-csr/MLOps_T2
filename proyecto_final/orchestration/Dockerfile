@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.13
 
 # Avoid .pyc files and use unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -20,12 +20,12 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --------------------------------------------------------------------
-# 2) Copy application code + model artifacts (.pkl)
+# 2) Copy application code + model artifacts (.joblib)
 # --------------------------------------------------------------------
 # This copies:
 # - main.py
 # - proyecto_final/ package
-# - models/ directory with all .pkl files
+# - models/ directory with all .joblib files
 # - any other project files needed at runtime
 COPY . /app
 

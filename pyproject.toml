@@ -159,7 +159,7 @@ dependencies = [
     "parso==0.8.5",
     "pathspec==0.12.1",
     "pexpect==4.9.0",
-    "pillow==11.3.0",
+    "pillow<11",
     "platformdirs==4.4.0",
     "prometheus-client==0.23.1",
     "prompt-toolkit==3.0.52",
@@ -246,6 +246,9 @@ dependencies = [
     "xgboost>=3.1.1",
     "yarl==1.21.0",
     "zc-lockfile==4.0",
+    "evidently[all]>=0.7.16",
+    "cython>=3.2.1",
+    "alibi-detect>=0.12.0",
 ]
 
 

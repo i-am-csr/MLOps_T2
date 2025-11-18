@@ -459,10 +459,10 @@ Si estás migrando desde `pip` + `requirements.txt`, `uv` puede leer `pyproject.
   - `models:/energy-efficiency/xgboost/0.1.0`
 
 - Archivos empaquetados en la imagen Docker bajo `/app/models`:
-  - `initial_cleaning_pipeline.pkl`
-  - `encoding_scaling_transformer.pkl`
-  - `xgboost_heating_model.pkl`
-  - `xgboost_cooling_model.pkl`
+  - `initial_cleaning_pipeline.joblib`
+  - `encoding_scaling_transformer.joblib`
+  - `xgboost_heating_model.joblib`
+  - `xgboost_cooling_model.joblib`
 
 ### Construcción y ejecución del contenedor
 

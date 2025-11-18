@@ -91,7 +91,7 @@ app = FastAPI(
     description=(
         "FastAPI service to predict heating/cooling.\n\n"
         f"Artifact: {MODEL_ARTIFACT_URI}.\n"
-        "Models (.pkl) are packaged inside Docker image in /app/models."
+        "Models (.joblib) are packaged inside Docker image in /app/models."
     ),
 )
 
@@ -100,10 +100,10 @@ app = FastAPI(
 def load_paths():
     """
     Initialize shared paths to preprocessing and model artifacts.
-    All artifacts are packaged as .pkl files under /app/models.
+    All artifacts are packaged as .joblib files under /app/models.
     """
-    app.state.preprocessing_pipeline_path = MODELS_DIR / "initial_cleaning_pipeline.pkl"
-    app.state.transformer_path = MODELS_DIR / "encoding_scaling_transformer.pkl"
+    app.state.preprocessing_pipeline_path = MODELS_DIR / "initial_cleaning_pipeline.joblib"
+    app.state.transformer_path = MODELS_DIR / "encoding_scaling_transformer.joblib"
 
 
 @app.get("/", summary="Healthcheck")
@@ -148,10 +148,10 @@ def predict(request: PredictionRequest):
     transformer_path = app.state.transformer_path
 
     if request.target == "both":
-        # Multi-target mode -> use MultiTargetPredictor and two .pkl models
+        # Multi-target mode -> use MultiTargetPredictor and two .joblib models
         model_paths = {
-            "heating": MODELS_DIR / f"{BEST_MODEL}_heating_model.pkl",
-            "cooling": MODELS_DIR / f"{BEST_MODEL}_cooling_model.pkl",
+            "heating": MODELS_DIR / f"{BEST_MODEL}_heating_model.joblib",
+            "cooling": MODELS_DIR / f"{BEST_MODEL}_cooling_model.joblib",
         }
 
         predictor = MultiTargetPredictor(
@@ -164,7 +164,7 @@ def predict(request: PredictionRequest):
 
     else:
         # Single target mode
-        model_path = MODELS_DIR / f"{BEST_MODEL}_{request.target}_model.pkl"
+        model_path = MODELS_DIR / f"{BEST_MODEL}_{request.target}_model.joblib"
 
         predictor = Predictor(
             model_path=model_path,

@@ -18,7 +18,10 @@ from loguru import logger
 
 from proyecto_final.config import MODELS_DIR
 from proyecto_final.modeling.predictor import Predictor, MultiTargetPredictor
-
+from sklearn.pipeline import Pipeline
+from loguru import logger
+import joblib
+import pandas as pd
 
 def load_input_data(csv_path: str = None, json_path: str = None) -> pd.DataFrame:
     """
@@ -90,6 +93,32 @@ def main():
 
     preprocessing_pipeline_path = MODELS_DIR / "initial_cleaning_pipeline.joblib"
     transformer_path = MODELS_DIR / "encoding_scaling_transformer.joblib"
+
+
+
+    pipe = joblib.load(MODELS_DIR / "initial_cleaning_pipeline.joblib")
+    df = df_input.copy()
+
+    if isinstance(pipe, Pipeline):
+        X_tmp = df.copy()
+        for name, step in pipe.named_steps.items():
+            logger.info(f"Applying step: {name} ({type(step).__name__})")
+            try:
+                X_tmp = step.transform(X_tmp)
+            except TypeError as e:
+                logger.error(f"TypeError in step '{name}': {e}")
+                # Inspect problematic columns
+                for col in X_tmp.columns:
+                    if pd.api.types.is_categorical_dtype(X_tmp[col]):
+                        cats = set(X_tmp[col].cat.categories)
+                        vals = set(X_tmp[col].unique())
+                        bad_vals = vals - cats
+                        if bad_vals:
+                            logger.error(f"Column '{col}' has values not in categories: {bad_vals}")
+                raise
+    else:
+        # no Pipeline, it’s a single transformer
+        pipe.transform(df)
 
     if args.target == "both":
         logger.info("[Predict] Using MultiTargetPredictor for both targets")

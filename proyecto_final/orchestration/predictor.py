@@ -65,39 +65,115 @@ class Predictor:
 
         logger.info("[Predictor] All artifacts loaded successfully")
 
+    # def preprocess(self, X: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Apply preprocessing pipeline to input data.
+    #
+    #     This method applies both the initial cleaning pipeline and the
+    #     encoding/scaling transformer to prepare data for prediction.
+    #
+    #     Args:
+    #         X: Raw input DataFrame
+    #
+    #     Returns:
+    #         Preprocessed DataFrame ready for prediction
+    #
+    #     Example:
+    #         >>> X_processed = predictor.preprocess(X_raw)
+    #     """
+    #     logger.info(f"[Preprocess] Input shape: {X.shape}")
+    #
+    #     X_cleaned = self.preprocessing_pipeline.transform(X)
+    #     logger.info(f"[Preprocess] After cleaning: {X_cleaned.shape}")
+    #
+    #     X_transformed = self.transformer.transform(X_cleaned)
+    #     logger.info(f"[Preprocess] After encoding/scaling: {X_transformed.shape}")
+    #
+    #     if hasattr(X_transformed, "shape") and len(X_transformed.shape) == 2:
+    #         feature_names = self.transformer.get_feature_names_out()
+    #         X_transformed = pd.DataFrame(
+    #             X_transformed,
+    #             columns=feature_names,
+    #             index=X_cleaned.index
+    #         )
+    #
+    #     return X_transformed
+
+    # python
     def preprocess(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Apply preprocessing pipeline to input data.
+        logger.info(f"[Preprocess] Input shape: {getattr(X, 'shape', None)}")
+        X = X.copy()
 
-        This method applies both the initial cleaning pipeline and the
-        encoding/scaling transformer to prepare data for prediction.
+        # Convert ALL columns to non-categorical dtypes upfront
+        for col in X.columns:
+            if X[col].dtype == 'category':
+                X[col] = X[col].astype(object)
 
-        Args:
-            X: Raw input DataFrame
+        def _force_non_categorical(df):
+            """Recursively ensure no categorical dtypes remain."""
+            if isinstance(df, pd.DataFrame):
+                for col in df.select_dtypes(include=['category']).columns:
+                    df[col] = df[col].astype(object)
+            return df
 
-        Returns:
-            Preprocessed DataFrame ready for prediction
+        def _as_dataframe(arr, index):
+            if hasattr(arr, "shape") and len(arr.shape) == 2:
+                try:
+                    cols = self.transformer.get_feature_names_out()
+                except Exception:
+                    cols = [f"f_{i}" for i in range(arr.shape[1])]
+                return pd.DataFrame(arr, columns=cols, index=index)
+            return arr
 
-        Example:
-            >>> X_processed = predictor.preprocess(X_raw)
-        """
-        logger.info(f"[Preprocess] Input shape: {X.shape}")
+        # Initialize variables to avoid UnboundLocalError
+        X_cleaned = None
+        X_transformed = None
 
-        X_cleaned = self.preprocessing_pipeline.transform(X)
-        logger.info(f"[Preprocess] After cleaning: {X_cleaned.shape}")
+        # Apply preprocessing with categorical error handling
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                X_cleaned = self.preprocessing_pipeline.transform(X)
 
-        X_transformed = self.transformer.transform(X_cleaned)
-        logger.info(f"[Preprocess] After encoding/scaling: {X_transformed.shape}")
+                # Force non-categorical if result is DataFrame
+                X_cleaned = _force_non_categorical(X_cleaned)
 
-        if hasattr(X_transformed, "shape") and len(X_transformed.shape) == 2:
-            feature_names = self.transformer.get_feature_names_out()
-            X_transformed = pd.DataFrame(
-                X_transformed,
-                columns=feature_names,
-                index=X_cleaned.index
-            )
+                logger.info(f"[Preprocess] After cleaning: {getattr(X_cleaned, 'shape', None)}")
 
-        return X_transformed
+                X_transformed = self.transformer.transform(X_cleaned)
+                logger.info(f"[Preprocess] After encoding/scaling: {getattr(X_transformed, 'shape', None)}")
+
+                break  # Success, exit retry loop
+
+            except (TypeError, ValueError) as e:
+                if "Cannot setitem on a Categorical with a new category" in str(e):
+                    logger.warning(f"[Preprocess] Attempt {attempt + 1}: Categorical error: {e}")
+
+                    if attempt == max_retries - 1:
+                        # Last resort: convert everything to object/numeric
+                        logger.warning("[Preprocess] Final attempt: converting all non-numeric to object")
+                        for col in X.columns:
+                            if not pd.api.types.is_numeric_dtype(X[col]):
+                                X[col] = X[col].astype(str).astype(object)
+                            else:
+                                X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0)
+                    else:
+                        # Progressive fixes
+                        logger.warning(f"[Preprocess] Retry {attempt + 1}: forcing object dtypes")
+                        for col in X.columns:
+                            if not pd.api.types.is_numeric_dtype(X[col]):
+                                X[col] = X[col].astype(object)
+                else:
+                    raise
+
+        # Check if preprocessing succeeded
+        if X_transformed is None:
+            raise RuntimeError("Preprocessing failed after all retry attempts")
+
+        # Ensure DataFrame output with feature names and original index
+        result = _as_dataframe(X_transformed,
+                               index=(X_cleaned.index if isinstance(X_cleaned, pd.DataFrame) else X.index))
+        return result
 
     def predict(self, X: Union[pd.DataFrame, List[Dict]]) -> pd.Series:
         """
@@ -233,6 +309,7 @@ class MultiTargetPredictor:
         logger.info("[MultiTarget] Predictions complete")
 
         return result
+
 
     def predict_dict(self, X: Union[pd.DataFrame, List[Dict]]) -> List[Dict]:
         """
